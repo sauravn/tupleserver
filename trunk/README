@@ -1,0 +1,10 @@
+You need tcl and libevent to compile tupleserver. To compile type make.
+
+Tupleserver runs on port 5555 and uses a simple line-based protocol.
+There are three functions:
+
+write <tuple>
+read <pattern>
+exit
+
+Pattern uses Tcl_StringMatch syntax. Tuples are returned LIFO.
