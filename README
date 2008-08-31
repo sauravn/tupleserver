@@ -7,4 +7,4 @@ write <tuple>
 read <pattern>
 exit
 
-Pattern uses Tcl_StringMatch syntax. Tuples are returned LIFO.
+Pattern uses Tcl_StringMatch syntax. Tuples are returned FIFO.
