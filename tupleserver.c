@@ -17,7 +17,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <err.h>
-#include <sys/queue.h>
+#include <queue.h>
 
 /* Libevent. */
 #include <event.h>
