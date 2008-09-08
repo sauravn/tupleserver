@@ -7,6 +7,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <syslog.h>
+#include <signal.h>
 
 /* Required by event.h. */
 #include <sys/time.h>
@@ -88,7 +89,7 @@ setnonblock(int fd)
 }
 
 int
-find_readers(char *tuple)
+find_readers(char *tuple, struct evbuffer *evb)
 {
 	struct reader_entry *entry, *tmp_entry;
 	char buf[16384];
@@ -97,8 +98,7 @@ find_readers(char *tuple)
 	for (entry = TAILQ_FIRST(&readers); entry != NULL; entry = tmp_entry) {
 		tmp_entry = TAILQ_NEXT(entry, entries);
 		if (Tcl_StringMatch(tuple, entry->pattern)) {
-			snprintf(buf, sizeof(buf), "ok %s\n", tuple);
-			write(entry->cli->fd, buf, strlen(buf));
+			evbuffer_add_printf(evb, "ok %s\n", tuple);
 			TAILQ_REMOVE(&readers, entry, entries);
 			return 1;
 		}
@@ -118,8 +118,10 @@ buffered_on_read(struct bufferevent *bev, void *arg)
 	struct client *cli = (struct client *)arg;
 	struct tuple_entry *entry, *tmp_entry;
 	struct reader_entry *reader;
-	char *cmd, *pattern;
+	struct evbuffer *evb;
+	char *cmd, *pattern, *data;
 	char buf[16384];
+	int i;
 	
 	*buf = '\0';
 	cmd = evbuffer_readline(bev->input);
@@ -127,27 +129,25 @@ buffered_on_read(struct bufferevent *bev, void *arg)
 		return;
 	}
 	
+	evb = evbuffer_new();
 	if (strncmp(cmd, "write", 5) == 0) {
-		if (!find_readers(cmd+6)) {
+		if (!find_readers(cmd+6, evb)) {
 			entry = malloc(sizeof(*entry));
 			entry->tuple_string = malloc(strlen(cmd+6)+1);
 			strcpy(entry->tuple_string, cmd+6);
 			TAILQ_INSERT_TAIL(&tuples, entry, entries);
 		}
-		strncat(buf, "ok write\n", sizeof(buf));
+		evbuffer_add_printf(evb, "ok write\n");
 	} else if (strncmp(cmd, "read", 4) == 0) {
 		pattern = cmd+5;
 		for (entry = TAILQ_FIRST(&tuples); entry != NULL; entry = tmp_entry) {
 			tmp_entry = TAILQ_NEXT(entry, entries);
 			if (Tcl_StringMatch(entry->tuple_string, pattern)) {
-				snprintf(buf, sizeof(buf), "ok %s\n", entry->tuple_string);
-				write(cli->fd, buf, strlen(buf));
-				*buf = '\0';
+				evbuffer_add_printf(evb, "ok %s\n", entry->tuple_string);
 				TAILQ_REMOVE(&tuples, entry, entries);
 				free(entry->tuple_string);
 				free(entry);
-				free(cmd);
-				return;
+				goto out;
 			}
 		}
 		reader = malloc(sizeof(*reader));
@@ -157,21 +157,21 @@ buffered_on_read(struct bufferevent *bev, void *arg)
 		TAILQ_INSERT_TAIL(&readers, reader, entries);
 	} else if (strncmp(cmd, "dump", 4) == 0) {
 		TAILQ_FOREACH(entry, &tuples, entries) {
-			snprintf(buf, sizeof(buf), "ok %s\n", entry->tuple_string);
-			write(cli->fd, buf, strlen(buf));
-			*buf = '\0';
+			evbuffer_add_printf(evb, "ok %s\n", entry->tuple_string);
         }
 	} else if (strncmp(cmd, "exit", 4) == 0
 			   || strncmp(cmd, "quit", 4) == 0) {
-		write(cli->fd, "ok bye\n", 7);
-		close(cli->fd);
-		free(cmd);
-		return;
+		evbuffer_add_printf(evb, "ok bye\n");
+		shutdown(cli->fd, SHUT_RDWR);
 	} else {
-		strncat(buf, "error unknown command\n", sizeof(buf));
+		evbuffer_add_printf(evb, "error unknown command\n");
 	}
+	
+out:
+
+	bufferevent_write_buffer(bev, evb);
+	evbuffer_free(evb);
 	free(cmd);
-	bufferevent_write(bev, buf, strlen(buf));
 }
 
 /**
@@ -270,9 +270,6 @@ on_accept(int fd, short ev, void *arg)
 	/* We have to enable it before our callbacks will be
 	 * called. */
 	bufferevent_enable(client->buf_ev, EV_READ);
-
-	printf("Accepted connection from %s\n", 
-	    inet_ntoa(client_addr.sin_addr));
 }
 
 int
