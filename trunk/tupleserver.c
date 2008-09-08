@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <syslog.h>
 
 /* Required by event.h. */
 #include <sys/time.h>
@@ -26,6 +27,7 @@
 
 /* Port to listen on. */
 #define SERVER_PORT 5555
+int debug = 0;
 
 /**
  * A struct for client specific data, also includes pointer to create
@@ -51,6 +53,21 @@ struct tuple_entry {
 	TAILQ_ENTRY(tuple_entry) entries;
 };
 TAILQ_HEAD(, tuple_entry) tuples;
+
+
+void
+signal_handler(int sig) {
+	switch(sig) {
+		case SIGTERM:
+		case SIGHUP:
+		case SIGINT:
+			event_loopbreak();
+			break;
+        default:
+            syslog(LOG_WARNING, "Unhandled signal (%d) %s", strsignal(sig));
+            break;
+    }
+}
 
 /**
  * Set a socket to non-blocking mode.
@@ -129,6 +146,7 @@ buffered_on_read(struct bufferevent *bev, void *arg)
 				TAILQ_REMOVE(&tuples, entry, entries);
 				free(entry->tuple_string);
 				free(entry);
+				free(cmd);
 				return;
 			}
 		}
@@ -147,10 +165,12 @@ buffered_on_read(struct bufferevent *bev, void *arg)
 			   || strncmp(cmd, "quit", 4) == 0) {
 		write(cli->fd, "ok bye\n", 7);
 		close(cli->fd);
+		free(cmd);
 		return;
 	} else {
 		strncat(buf, "error unknown command\n", sizeof(buf));
 	}
+	free(cmd);
 	bufferevent_write(bev, buf, strlen(buf));
 }
 
@@ -258,10 +278,48 @@ on_accept(int fd, short ev, void *arg)
 int
 main(int argc, char **argv)
 {
-	int listen_fd;
+	int listen_fd, ch;
+	int daemon = 0;
+	int port = SERVER_PORT;
 	struct sockaddr_in listen_addr;
 	struct event ev_accept;
 	int reuseaddr_on;
+    pid_t   pid, sid;
+
+    signal(SIGHUP, signal_handler);
+    signal(SIGTERM, signal_handler);
+    signal(SIGINT, signal_handler);
+    signal(SIGQUIT, signal_handler);
+
+    while ((ch = getopt(argc, argv, "dvp:")) != -1) {
+	    switch (ch) {
+	    case 'd':
+	        daemon = 1;
+	        break;
+	    case 'v':
+	        debug = 1;
+	        break;
+	    case 'p':
+	        port = atoi(optarg);
+	        break;
+	    }
+    }
+
+    if (daemon) {
+	    pid = fork();
+	    if (pid < 0) {
+			exit(EXIT_FAILURE);
+	    } else if (pid > 0) {
+			exit(EXIT_SUCCESS);
+	    }
+
+	    umask(0);
+	    sid = setsid();
+	    if (sid < 0) {
+	    	exit(EXIT_FAILURE);
+	    }
+	}
+
 
 	TAILQ_INIT(&tuples);
 	TAILQ_INIT(&readers);
@@ -276,7 +334,7 @@ main(int argc, char **argv)
 	memset(&listen_addr, 0, sizeof(listen_addr));
 	listen_addr.sin_family = AF_INET;
 	listen_addr.sin_addr.s_addr = INADDR_ANY;
-	listen_addr.sin_port = htons(SERVER_PORT);
+	listen_addr.sin_port = htons(port);
 	if (bind(listen_fd, (struct sockaddr *)&listen_addr,
 		sizeof(listen_addr)) < 0)
 		err(1, "bind failed");
@@ -298,6 +356,8 @@ main(int argc, char **argv)
 
 	/* Start the event loop. */
 	event_dispatch();
+	shutdown(listen_fd, SHUT_RDWR);
+	close(listen_fd);
 	printf("dying\n");
 	return 0;
 }
