@@ -8,6 +8,7 @@
 #include <arpa/inet.h>
 #include <syslog.h>
 #include <signal.h>
+#include <sys/stat.h>
 
 /* Required by event.h. */
 #include <sys/time.h>
@@ -64,9 +65,6 @@ signal_handler(int sig) {
 		case SIGINT:
 			event_loopbreak();
 			break;
-        default:
-            syslog(LOG_WARNING, "Unhandled signal (%d) %s", strsignal(sig));
-            break;
     }
 }
 
@@ -92,9 +90,7 @@ int
 find_readers(char *tuple, struct evbuffer *evb)
 {
 	struct reader_entry *entry, *tmp_entry;
-	char buf[16384];
 
-	*buf = '\0';
 	for (entry = TAILQ_FIRST(&readers); entry != NULL; entry = tmp_entry) {
 		tmp_entry = TAILQ_NEXT(entry, entries);
 		if (Tcl_StringMatch(tuple, entry->pattern)) {
@@ -119,11 +115,8 @@ buffered_on_read(struct bufferevent *bev, void *arg)
 	struct tuple_entry *entry, *tmp_entry;
 	struct reader_entry *reader;
 	struct evbuffer *evb;
-	char *cmd, *pattern, *data;
-	char buf[16384];
-	int i;
-	
-	*buf = '\0';
+	char *cmd, *pattern;
+
 	cmd = evbuffer_readline(bev->input);
 	if (cmd == NULL) {
 		return;
@@ -168,7 +161,6 @@ buffered_on_read(struct bufferevent *bev, void *arg)
 	}
 	
 out:
-
 	bufferevent_write_buffer(bev, evb);
 	evbuffer_free(evb);
 	free(cmd);
