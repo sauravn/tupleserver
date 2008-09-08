@@ -1,4 +1,4 @@
-CFLAGS =	-I$(LIBEVENT) -Wall -g
+CFLAGS =	-I. -I$(LIBEVENT) -Wall -g
 LIBS =		-L$(LIBEVENT) -levent -ltcl
 
 tupleserver: tupleserver.c
