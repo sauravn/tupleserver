@@ -87,14 +87,18 @@ setnonblock(int fd)
 }
 
 int
-find_readers(char *tuple, struct evbuffer *evb)
+find_readers(char *tuple)
 {
 	struct reader_entry *entry, *tmp_entry;
+	struct evbuffer *evb;
 
 	for (entry = TAILQ_FIRST(&readers); entry != NULL; entry = tmp_entry) {
 		tmp_entry = TAILQ_NEXT(entry, entries);
 		if (Tcl_StringMatch(tuple, entry->pattern)) {
+		        evb = evbuffer_new();
 			evbuffer_add_printf(evb, "ok %s\n", tuple);
+			bufferevent_write_buffer(entry->cli->buf_ev, evb);
+			evbuffer_free(evb);
 			TAILQ_REMOVE(&readers, entry, entries);
 			return 1;
 		}
@@ -124,7 +128,7 @@ buffered_on_read(struct bufferevent *bev, void *arg)
 	
 	evb = evbuffer_new();
 	if (strncmp(cmd, "write", 5) == 0) {
-		if (!find_readers(cmd+6, evb)) {
+		if (!find_readers(cmd+6)) {
 			entry = malloc(sizeof(*entry));
 			entry->tuple_string = malloc(strlen(cmd+6)+1);
 			strcpy(entry->tuple_string, cmd+6);
@@ -188,7 +192,7 @@ buffered_on_error(struct bufferevent *bev, short what, void *arg)
 	if (what & EVBUFFER_EOF) {
 		/* Client disconnected, remove the read event and the
 		 * free the client structure. */
-		printf("Client disconnected.\n");
+		//printf("Client disconnected.\n");
 	} else {
 		warn("Client socket error, disconnecting.\n");
 	}
