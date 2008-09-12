@@ -9,6 +9,7 @@
 #include <syslog.h>
 #include <signal.h>
 #include <sys/stat.h>
+#include <fnmatch.h>
 
 /* Required by event.h. */
 #include <sys/time.h>
@@ -24,8 +25,6 @@
 
 /* Libevent. */
 #include <event.h>
-
-#include "tcl.h"
 
 /* Port to listen on. */
 #define SERVER_PORT 5555
@@ -94,7 +93,7 @@ find_readers(char *tuple)
 
 	for (entry = TAILQ_FIRST(&readers); entry != NULL; entry = tmp_entry) {
 		tmp_entry = TAILQ_NEXT(entry, entries);
-		if (Tcl_StringMatch(tuple, entry->pattern)) {
+		if (fnmatch(entry->pattern, tuple, FNM_NOESCAPE) == 0) {
 		        evb = evbuffer_new();
 			evbuffer_add_printf(evb, "ok %s\n", tuple);
 			bufferevent_write_buffer(entry->cli->buf_ev, evb);
@@ -139,7 +138,7 @@ buffered_on_read(struct bufferevent *bev, void *arg)
 		pattern = cmd+5;
 		for (entry = TAILQ_FIRST(&tuples); entry != NULL; entry = tmp_entry) {
 			tmp_entry = TAILQ_NEXT(entry, entries);
-			if (Tcl_StringMatch(entry->tuple_string, pattern)) {
+			if (fnmatch(pattern, entry->tuple_string, FNM_NOESCAPE) == 0) {
 				evbuffer_add_printf(evb, "ok %s\n", entry->tuple_string);
 				TAILQ_REMOVE(&tuples, entry, entries);
 				free(entry->tuple_string);
