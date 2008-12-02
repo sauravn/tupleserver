@@ -118,7 +118,9 @@ buffered_on_read(struct bufferevent *bev, void *arg)
 	struct tuple_entry *entry, *tmp_entry;
 	struct reader_entry *reader;
 	struct evbuffer *evb;
+	int count;
 	char *cmd, *pattern;
+    char str[10];
 
 	cmd = evbuffer_readline(bev->input);
 	if (cmd == NULL) {
@@ -155,6 +157,13 @@ buffered_on_read(struct bufferevent *bev, void *arg)
 		TAILQ_FOREACH(entry, &tuples, entries) {
 			evbuffer_add_printf(evb, "ok %s\n", entry->tuple_string);
         }
+    } else if (strncmp(cmd, "count", 4) == 0) {
+        count = 0;
+        TAILQ_FOREACH(entry, &tuples, entries) {
+            count++;
+        }
+        sprintf(str, "%d", count);
+        evbuffer_add_printf(evb, "ok %s\n", str);
 	} else if (strncmp(cmd, "exit", 4) == 0
 			   || strncmp(cmd, "quit", 4) == 0) {
 		evbuffer_add_printf(evb, "ok bye\n");
