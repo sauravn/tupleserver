@@ -11,7 +11,7 @@ Command line arguments:
 Commands:
 
 write <tuple>	Writes data to the queue. Example: "write test foo bar".
-read <pattern>	Get items from the queue matching the pattern. Example: "read foo *"
+read <pattern>	Get items from the queue matching the pattern. Example: "read test *"
 count 		Returns current queue depth.
 dump 		Returns all items currently en-queued, without removing from the queue.
 exit		Exit.
