@@ -1,10 +1,19 @@
-You need tcl and libevent to compile tupleserver. To compile type make.
+Tupleserver is a simple line-based protocol. 
 
-Tupleserver runs on port 5555 and uses a simple line-based protocol.
-There are three functions:
+You need Tcl and libevent to compile tupleserver. To compile, simply type "make".
 
-write <tuple>
-read <pattern>
-exit
+Command line arguments:
+
+-v <1|0>	Run in verbose mode. Default: 0.
+-d <1|0>	Run as a damon. Default: 0.
+-p <port>	Run on the specified port. Default: 5555.
+
+Commands:
+
+write <tuple>	Writes data to the queue. Example: "write test foo bar".
+read <pattern>	Get items from the queue matching the pattern. Example: "read foo *"
+count 		Returns current queue depth.
+dump 		Returns all items currently en-queued, without removing from the queue.
+exit		Exit.
 
 Pattern uses Tcl_StringMatch syntax. Tuples are returned FIFO.
