@@ -21,7 +21,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <err.h>
-#include <queue.h>
+#include "queue.h"
 
 /* Libevent. */
 #include <event.h>
