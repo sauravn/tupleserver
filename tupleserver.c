@@ -99,6 +99,8 @@ find_readers(char *tuple)
 			bufferevent_write_buffer(entry->cli->buf_ev, evb);
 			evbuffer_free(evb);
 			TAILQ_REMOVE(&readers, entry, entries);
+                        free(entry->pattern);
+                        free(entry);
 			return 1;
 		}
 	}
